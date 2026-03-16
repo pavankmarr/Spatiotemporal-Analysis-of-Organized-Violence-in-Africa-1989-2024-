@@ -1,0 +1,129 @@
+---
+title: "Dataset Analyzing Organized Violence in Africa (1989–2024)"
+subtitle: "An Exploration of the UCDP Georeferenced Event Dataset"
+format:
+  html:
+    self-contained: true
+    theme: flatly
+    toc: true
+    toc-title: "Table of Contents"
+    toc-depth: 2
+bibliography: references.bib
+---
+
+## Introduction to the Table
+
+This table aims to provide an interactive analysis of organized violence across the African continent from 1989 to 2024. The primary data source is the **Uppsala Conflict Data Program (UCDP) Georeferenced Event Dataset (GED)** [@sundberg2013]. 
+
+---
+
+## Understanding the Variables
+
+This table uses specific variables from the UCDP GED. Below is a description of what each column represents so it makes for easier analysis:
+
+* **Conflict Name:** The overarching title of the conflict as defined by UCDP (e.g., "Government of Mali - JNIM").
+
+* **Side A (Actor 1) & Side B (Actor 2):** The specific armed actors involved in the discrete event. "Side A" is typically the government in state-based conflicts, while "Side B" represents the rebel group, militia, or opposing force.
+
+* **Country & Province/State:** Gives the administrative boundaries where the event took place when available.
+
+* **Specific Location (`where_coordinates`):** Gives the exact village, town, or city name closest to the GPS coordinates of the violent event.
+
+* **Type of Violence (`type_of_violence`):** UCDP classifies violence into three distinct categories:
+
+  * *State-based:* Violence involving at least one government actor.
+
+  * *Non-state:* Violence between two non-governmental armed groups.
+
+  * *One-sided:* The intentional, direct targeting of unarmed civilians by an armed group.
+
+* **Est. Total Fatalities (`best`):** The UCDP's "best estimate" for total deaths (combatant and civilian) from the specific event.
+
+* **Civilian Fatalities (`deaths_civilians`):** The number of verified unarmed civilians killed during the event.
+
+---
+
+## Interactive Table
+
+Instructions: Use the search boxes at the top of each column to filter the data. Use the navigation buttons at the bottom to jump between pages or to the first/last page of the records. 
+
+**To search between specific ranges (e.g., finding events with 10 to 100 fatalities), type the minimum value followed by three dots and the maximum value into the fatality search box (Example: 10 ... 100).***
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+library(dplyr)
+library(lubridate)
+library(DT) 
+
+ucdp_data <- readRDS("globaldata.rds") %>%
+  filter(region == "Africa") %>%
+  select(date_start, conflict_name, side_a, side_b, 
+         country, adm_1, where_coordinates, type_of_violence, 
+         best, deaths_civilians)
+
+ucdp_data %>%
+  mutate(
+    Year = as.integer(year(as.Date(date_start))), 
+    Month = month(as.Date(date_start), label = TRUE, abbr = FALSE),
+    country = as.factor(country), 
+    Violence_Type = as.factor(case_when( 
+      type_of_violence == 1 ~ "State-based",
+      type_of_violence == 2 ~ "Non-state",
+      type_of_violence == 3 ~ "One-sided",
+      TRUE ~ "Unknown"
+    ))
+  ) %>%
+  group_by(Year, Month, conflict_name, side_a, side_b, country, adm_1, where_coordinates, Violence_Type) %>%
+  summarize(
+    `Total Events` = n(),
+    `Est. Total Fatalities` = sum(best, na.rm = TRUE),
+    `Civilian Fatalities` = sum(deaths_civilians, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(Year), desc(Month), desc(`Est. Total Fatalities`)) %>%
+  rename(
+    `Conflict Name` = conflict_name,
+    `Side A (Actor 1)` = side_a,
+    `Side B (Actor 2)` = side_b,
+    Country = country,
+    `Province/State` = adm_1,
+    `Specific Location` = where_coordinates,
+    `Type of Violence` = Violence_Type
+  ) %>%
+  datatable(
+    filter = "top", 
+    rownames = FALSE,
+    class = 'cell-border stripe hover',
+    options = list(
+      pageLength = 10, 
+      autoWidth = FALSE,
+      scrollX = TRUE,  
+      searchHighlight = TRUE,
+      deferRender = TRUE,
+      pagingType = "full_numbers",
+      stateSave = FALSE,
+      dom = 'tplir',
+      language = list(
+        paginate = list(
+          `next` = "Next",
+          previous = "Prev",
+          first = "First",
+          last = "Last"
+        )
+      )
+    )
+  ) %>%
+  formatStyle('Year', formatter = JS("function(data){return data;}")) %>%
+  formatStyle(
+    c('Est. Total Fatalities', 'Civilian Fatalities'),
+    backgroundColor = '#f9f9f9',
+    fontWeight = 'bold'
+  )
+```
+
+## References
+::: {#refs}
+:::
